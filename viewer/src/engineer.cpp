@@ -454,7 +454,7 @@ glm::vec3 Engineer::local_eye(const CabView& cab) const {
         const glm::vec3 seat = chair_ < chairs.size() ? vec(chairs[chair_].seated) : cab.eye();
         return seat + glm::vec3{0.0f, seated_eye_, 0.0f} + lean_;
     }
-    return feet_ + glm::vec3{0.0f, rise(cab), 0.0f};
+    return feet_ + glm::vec3{0.0f, rise(cab) - crouch_share * height_ * crouch_, 0.0f};
 }
 
 float Engineer::rise(const CabView& cab) const noexcept {
@@ -812,15 +812,22 @@ void Engineer::move_outside(const EngineerControls& controls, const Outdoors& ou
     walk_outside(walk_step(controls, camera.yaw, elapsed), outdoors, dt);
 }
 
+void Engineer::ease_crouch(const EngineerControls& controls, const float elapsed) {
+    const float target = controls.crouch && on_foot() ? 1.0f : 0.0f;
+    const float step = (std::min)(elapsed, 0.1f) / crouch_time;
+    crouch_ = std::clamp(crouch_ + std::clamp(target - crouch_, -step, step), 0.0f, 1.0f);
+}
+
 void Engineer::update_on_foot(const EngineerControls& controls, const Outdoors& outdoors, const float elapsed,
                               ViewerCamera& camera) {
     prompt_.clear();
     if (mode_ != Mode::outside) return;
+    ease_crouch(controls, elapsed);
     look_pitch_ = camera.pitch;
     move_outside(controls, outdoors, elapsed, camera);
     blend_ = 1.0f;
     camera.fly = true;
-    camera.position = feet_ + glm::vec3{0.0f, height_, 0.0f};
+    camera.position = feet_ + glm::vec3{0.0f, eye_height(), 0.0f};
     camera.pitch = std::clamp(look_pitch_, -1.4f, 1.4f);
     last_yaw_ = camera.yaw;
     camera_set_ = true;
@@ -833,6 +840,7 @@ void Engineer::update(CabView& cab, const EngineerControls& controls, const glm:
         camera_set_ = false;
         return;
     }
+    ease_crouch(controls, elapsed);
     cab.poll();
     cab.step_doors(elapsed);
     const glm::vec4 ahead = car * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
@@ -1081,7 +1089,7 @@ void Engineer::update(CabView& cab, const EngineerControls& controls, const glm:
             camera.position = glm::vec3(car * glm::vec4(eye, 1.0f));
             camera.yaw = base + look_yaw_;
         } else {
-            camera.position = feet_ + glm::vec3{0.0f, height_, 0.0f}; // RTS: Height above his feet
+            camera.position = feet_ + glm::vec3{0.0f, eye_height(), 0.0f}; // RTS: Height above his feet
         }
         camera.pitch = std::clamp(look_pitch_, -1.4f, 1.4f);
     }
@@ -1355,6 +1363,7 @@ void Engineer::update_on_car(const CarOutside& car, const EngineerControls& cont
                              const float elapsed, ViewerCamera& camera) {
     prompt_.clear();
     if (mode_ != Mode::on_car || !car.details) return;
+    ease_crouch(controls, elapsed);
     const float dt = (std::min)(elapsed, 0.1f);
     const glm::vec4 ahead = car.transform * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
     const float base = std::atan2(ahead.x, ahead.z) + pi;
@@ -1417,10 +1426,10 @@ void Engineer::update_on_car(const CarOutside& car, const EngineerControls& cont
     blend_ = 1.0f;
     camera.fly = true;
     if (mode_ == Mode::on_car) {
-        camera.position = glm::vec3{car.transform * glm::vec4{feet_ + glm::vec3{0.0f, height_, 0.0f}, 1.0f}};
+        camera.position = glm::vec3{car.transform * glm::vec4{feet_ + glm::vec3{0.0f, eye_height(), 0.0f}, 1.0f}};
         camera.yaw = base + look_yaw_;
     } else {
-        camera.position = feet_ + glm::vec3{0.0f, height_, 0.0f};
+        camera.position = feet_ + glm::vec3{0.0f, eye_height(), 0.0f};
     }
     camera.pitch = std::clamp(look_pitch_, -1.4f, 1.4f);
     last_yaw_ = camera.yaw;

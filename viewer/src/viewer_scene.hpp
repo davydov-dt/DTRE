@@ -162,6 +162,7 @@ struct SceneInput {
     bool walk_forward = false, walk_back = false, walk_left = false, walk_right = false; // arrows held
     bool walk_run = false;             // Shift held
     bool walk_slow = false;            // End held
+    bool walk_crouch = false;          // C held, on foot
     bool engineer_action = false;      // Enter
     bool engineer_action_ctrl = false; // Ctrl held with that Enter
     bool cab_labels = false;           // Alt held: the captions of the cab's controls

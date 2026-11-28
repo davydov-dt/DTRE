@@ -60,6 +60,7 @@ struct EngineerControls {
     bool action_ctrl = false;  // Ctrl with that Enter: stand up at the chair's Pos3
     bool window = false;       // Num0: open or close the chair's window (RTS 0x4121BC)
     bool head_out = false;     // Num1: put the head out of the open window, or back
+    bool crouch = false;       // C held: on foot, lower the eye
 };
 
 // The world outside the cab, from the scene: what the engineer stands on at
@@ -208,6 +209,8 @@ public:
     // What Enter does here (empty: nothing), for the prompt on the screen.
     [[nodiscard]] const std::string& prompt() const noexcept { return prompt_; }
     [[nodiscard]] float height() const noexcept { return height_; }
+    // The eye above his feet, lowered while he crouches (on foot).
+    [[nodiscard]] float eye_height() const noexcept { return height_ * (1.0f - crouch_share * crouch_); }
     // Walking and running paces, m/s (config.ini engineer.velocity / engineer.velocity1).
     [[nodiscard]] float walk_speed() const noexcept { return walk_speed_; }
     [[nodiscard]] float run_speed() const noexcept { return run_speed_; }
@@ -244,6 +247,7 @@ private:
     [[nodiscard]] glm::vec3 walk_step(const EngineerControls& controls, float yaw, float elapsed) const;
     // On the ground: a passage going on, or the arrows' step.
     void move_outside(const EngineerControls& controls, const Outdoors& outdoors, float elapsed, const ViewerCamera& camera);
+    void ease_crouch(const EngineerControls& controls, float elapsed);
     void get_on(CabView& cab, std::size_t door);
     [[nodiscard]] glm::vec3 local_eye(const CabView& cab) const;
     // The screen's dolly: the eye and the head's angles from the focus's
@@ -253,8 +257,11 @@ private:
     Mode mode_ = Mode::off;
     std::size_t chair_ = 0;
     glm::vec3 feet_{};            // cab shape coordinates inside, scene coordinates outside, the car's on its outside
+    static constexpr float crouch_share = 0.35f; // of Height, the eye lowered while crouching
+    static constexpr float crouch_time = 0.2f;   // s to crouch or rise
     float height_ = 1.81f;        // engineer.Height
     float seated_eye_ = 0.81f;    // engineer.Height1
+    float crouch_ = 0.0f;         // 0..1, eased
     float walk_speed_ = 1.6f;     // engineer.velocity (RTS default 1.6 m/s, read_config)
     float run_speed_ = 5.0f;      // engineer.velocity1, with Shift (RTS default 5 m/s)
     // The head turned by the mouse: relative to the car inside.

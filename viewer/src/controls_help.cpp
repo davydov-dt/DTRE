@@ -82,6 +82,7 @@ void draw_controls_help() {
         row("Enter", "in the chair: rise at the desk and sit back / sit down / open a door / climb up");
         row("Ctrl+Enter", "get up from the chair, step into the gangway; at a door outside: climb up");
         row("Arrows, Shift, End", "walk, run, slower");
+        row("C (hold)", "crouch (on foot)");
         row(window_key_name(), "open the window");
         row(head_out_key_name(), "lean out");
         row(car_menu_key_name(), "the car menu at the coupling or bogie under the cursor (outside)");

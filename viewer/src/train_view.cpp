@@ -5552,7 +5552,7 @@ void TrainView::apply_start_view(ViewerCamera& camera) {
         if (cab_) {
             set_engineer(true);
             engineer_.stand_outside(feet);
-            camera.position = feet + glm::vec3{0.0f, engineer_.height(), 0.0f};
+            camera.position = feet + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         } else {
             camera.position = feet + glm::vec3{0.0f, 1.7f, 0.0f};
         }
@@ -5572,7 +5572,7 @@ void TrainView::apply_start_view(ViewerCamera& camera) {
         if (cab_) {
             set_engineer(true);
             engineer_.stand_outside(feet);
-            camera.position = feet + glm::vec3{0.0f, engineer_.height(), 0.0f};
+            camera.position = feet + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         } else {
             camera.position = feet + glm::vec3{0.0f, 1.7f, 0.0f};
         }
@@ -7404,7 +7404,8 @@ void TrainView::update_engineer(const SceneInput& input, ViewerCamera& camera, c
                                     .action = input.engineer_action,
                                     .action_ctrl = input.engineer_action_ctrl,
                                     .window = input.cab_window,
-                                    .head_out = input.head_out};
+                                    .head_out = input.head_out,
+                                    .crouch = input.walk_crouch};
     const Outdoors outdoors{
         .floor = [this](const glm::vec3& p) { return walk_floor(p); },
         .blocked = [this](const glm::vec3& from, const glm::vec3& to) { return walk_blocked(from, to); },
@@ -7428,14 +7429,14 @@ void TrainView::update_engineer(const SceneInput& input, ViewerCamera& camera, c
         }
         // The car went away: on the ground under him.
         outside_car_.reset();
-        engineer_.stand_outside(camera.eye() - glm::vec3{0.0f, engineer_.height(), 0.0f});
+        engineer_.stand_outside(camera.eye() - glm::vec3{0.0f, engineer_.eye_height(), 0.0f});
     }
     // On the ground by a car's ladder or steps (RTS 0x414D24): Ctrl+Enter
     // takes them (0x431F88), up onto its outside.
     bool at_ladder = false;
     // The dispatcher walks, gets into no train nor onto one (2026-11-21).
     if (engineer_.mode() == Engineer::Mode::outside && !engineer_.passing() && !console_) {
-        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.height(), 0.0f};
+        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         if (const auto ladder = ladder_target(eye, camera.forward())) {
             if (auto outside = car_outside(ladder->unit, ladder->car, false)) {
                 at_ladder = true;
@@ -7478,7 +7479,7 @@ void TrainView::update_engineer(const SceneInput& input, ViewerCamera& camera, c
     // next branch. Not where Enter already has a door or a ladder.
     if (engineer_.mode() == Engineer::Mode::outside && !engineer_.passing() && !at_ladder && board_prompt_.empty()
         && engineer_.prompt().empty()) {
-        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.height(), 0.0f};
+        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         if (const auto node = junction_at_hand(eye)) {
             board_prompt_ = tr("Enter: throw the switch");
             if (input.engineer_action && !input.engineer_action_ctrl) {
@@ -7945,7 +7946,7 @@ void TrainView::stand_at_cab_door(const std::size_t car) {
     // Facing the door.
     if (d.has_position) {
         const glm::vec3 door_at{body->transform * placement * glm::vec4(d.position[0], d.position[1], d.position[2], 1.0f)};
-        const glm::vec3 eye = at + glm::vec3{0.0f, engineer_.height(), 0.0f};
+        const glm::vec3 eye = at + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         if (glm::length(door_at - eye) > 1e-3f) look_once_ = glm::normalize(door_at - eye);
     }
     std::cout << "test: on foot at the door of the cab of car " << car + 1 << std::endl;
@@ -7998,7 +7999,7 @@ void TrainView::stand_at_passage(const std::size_t car) {
     // Looking at the door (the next car's room is drawn only so).
     if (const auto body = body_pose(unit, car, false)) {
         const glm::vec3 door{doors[*pick].position[0], doors[*pick].position[1], doors[*pick].position[2]};
-        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.height(), 0.0f};
+        const glm::vec3 eye = engineer_.feet() + glm::vec3{0.0f, engineer_.eye_height(), 0.0f};
         look_once_ = glm::vec3{body->transform * cab->placement() * glm::vec4{door - eye, 0.0f}};
     }
     std::cout << "test: on foot in car " << car + 1 << " at its door " << doors[*pick].name << std::endl;

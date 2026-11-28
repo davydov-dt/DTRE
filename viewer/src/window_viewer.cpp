@@ -2598,6 +2598,7 @@ void update_camera_from_keyboard(GLFWwindow* window, CameraInput& input, const f
         std::erase_if(keys, [&](const KeyEvent& e) {
             if (e.ctrl || e.alt) return false;
             if (!rts_keys && e.key == GLFW_KEY_E) return true;
+            if (e.key == GLFW_KEY_C) return true;
             return wasd_out && (e.key == GLFW_KEY_W || e.key == GLFW_KEY_A || e.key == GLFW_KEY_S || e.key == GLFW_KEY_D);
         });
     };
@@ -2632,6 +2633,7 @@ void update_camera_from_keyboard(GLFWwindow* window, CameraInput& input, const f
         in.walk_right = down(GLFW_KEY_RIGHT) || (wasd && down(GLFW_KEY_D));
         in.walk_run = shift;
         in.walk_slow = down(GLFW_KEY_END);
+        in.walk_crouch = input.on_foot && down(GLFW_KEY_C) && !ctrl && !alt;
         // Alt+Enter is the window's (full screen / window), not a door.
         in.engineer_action = (enter && !alt) || (use && (shift || input.action_at_hand));
         in.engineer_action_ctrl = (enter && ctrl && !alt) || (use && shift);
