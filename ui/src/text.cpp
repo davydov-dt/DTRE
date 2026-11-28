@@ -868,6 +868,7 @@ const std::unordered_map<std::string_view, const char*>& russian() {
         {"Rides as a passenger", "Едет пассажиром"},
         {"Door: click to open", "Дверь: щёлкните, чтобы открыть"},
         {"Door: click to close", "Дверь: щёлкните, чтобы закрыть"},
+        {"Chair: click to sit down", "Кресло: щёлкните, чтобы сесть"},
         {"Your presets (to share with other players)", "Свои пресеты (чтобы делиться с другими игроками)"},
         {"(no presets saved yet)", "(сохранённых пресетов пока нет)"},
         {"(choose a preset)", "(выберите пресет)"},

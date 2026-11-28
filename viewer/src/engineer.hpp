@@ -177,6 +177,8 @@ public:
     [[nodiscard]] bool focused() const noexcept { return focus_active_; }
     // Into the cab, seated in chair `chair` (0: the driver).
     void sit(std::size_t chair);
+    // Standing in `cab`: sit down in chair `chair`, the camera going there.
+    void sit_down(const CabView& cab, std::size_t chair);
     // On foot outside at `feet` (scene coordinates), as RTS starts an
     // activity beside the player's car.
     void stand_outside(const glm::vec3& feet);

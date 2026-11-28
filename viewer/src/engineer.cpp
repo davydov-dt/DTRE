@@ -378,6 +378,18 @@ void Engineer::sit(const std::size_t chair) {
     head_out_ = false;
 }
 
+void Engineer::sit_down(const CabView& cab, const std::size_t chair) {
+    if (mode_ != Mode::standing || chair >= cab.description().chairs.size()) return;
+    blend_from_ = local_eye(cab);
+    blend_ = 0.0f;
+    chair_ = chair;
+    seat_.reset();
+    up_ = false;
+    lean_ = lean_goal_ = glm::vec3{0.0f};
+    head_out_ = false;
+    mode_ = Mode::seated;
+}
+
 std::optional<std::size_t> Engineer::chair_window(const CabView& cab) const {
     const auto& chairs = cab.description().chairs;
     const auto& seats = cab.description().seats;

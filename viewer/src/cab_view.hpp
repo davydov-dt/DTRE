@@ -291,6 +291,13 @@ public:
         float distance{};
     };
     [[nodiscard]] std::optional<DoorPicked> pick_door(const glm::vec3& origin, const glm::vec3& direction, float reach) const;
+    // A chair whose .sd Position the ray passes close to, its seat not hidden
+    // behind a surface well in front of it (chairs have no nodes to pick).
+    struct ChairPicked {
+        std::size_t chair{}; // in description().chairs
+        float distance{};
+    };
+    [[nodiscard]] std::optional<ChairPicked> pick_chair(const glm::vec3& origin, const glm::vec3& direction, float reach) const;
     // OPENRTS_DOOR_PICK: from `eye` (the chair's seat and 0.75 m) at the middle of each door's own
     // surfaces as drawn now, what pick_door() finds (a line a door).
     [[nodiscard]] std::string door_pick_report(const glm::vec3& eye) const;

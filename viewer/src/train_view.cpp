@@ -8480,6 +8480,18 @@ void TrainView::pointer(const glm::vec3& eye, const std::optional<glm::vec3>& di
             return;
         }
     }
+    // A chair under the mouse while he stands: a click sits him down.
+    if (engineer_.mode() == Engineer::Mode::standing && !hovered_ && !door_hover_) {
+        if (const auto chair = cab->pick_chair(origin, along, 3.0f)) {
+            const auto& position = cab->description().chairs[chair->chair].position;
+            door_hover_ = DoorHover{.at = glm::vec3{to_scene * glm::vec4{position[0], position[1] + 0.15f, position[2], 1.0f}},
+                                    .text = tr("Chair: click to sit down")};
+            if (click) {
+                engineer_.sit_down(*cab, chair->chair);
+                return;
+            }
+        }
+    }
     // The wheel on a screen of the cab (TME's InsideThreeDimCamera): the eye
     // up close to read it, then back — the wheel down lets it go, and so does
     // * (restore_screen_focus). A switch in front of the screen keeps the

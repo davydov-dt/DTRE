@@ -834,6 +834,26 @@ std::optional<CabView::DoorPicked> CabView::pick_door(const glm::vec3& origin, c
     return best;
 }
 
+std::optional<CabView::ChairPicked> CabView::pick_chair(const glm::vec3& origin, const glm::vec3& direction, const float reach) const {
+    if (!geometry_ || cab_.chairs.empty()) return std::nullopt;
+    const auto rest = geometry_->collision.ray(origin, direction, reach, skip_);
+    std::optional<ChairPicked> best;
+    float best_off = 1e9f;
+    for (std::size_t i = 0; i < cab_.chairs.size(); ++i) {
+        const auto& position = cab_.chairs[i].position;
+        const glm::vec3 at{position[0], position[1], position[2]};
+        const float along = glm::dot(at - origin, direction);
+        if (along < 0.0f || along > reach) continue;
+        const float off = glm::length(at - (origin + direction * along));
+        if (off > 0.45f || off >= best_off) continue;
+        // A surface at the seat itself is the chair; one well before it hides it.
+        if (rest && rest->distance < along - 0.45f) continue;
+        best_off = off;
+        best = ChairPicked{i, along};
+    }
+    return best;
+}
+
 std::string CabView::door_pick_report(const glm::vec3& eye) const {
     if (!geometry_) return "the cab's surfaces not read";
     std::vector<glm::vec3> lo, hi;
