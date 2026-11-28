@@ -54,7 +54,7 @@ TrackView::TrackView(std::unique_ptr<simulation::TrackNetwork> network, const fo
     : network_(std::move(network)), origin_(origin) {
     joints_ = network_->measure_joints(3);
     visible_ = remembered("track_lines").value_or("0") == "1";
-    float seconds = 7.0f;
+    float seconds = 4.0f;
     if (const auto saved = remembered("junction_throw_seconds")) {
         char* end = nullptr;
         const float value = std::strtof(saved->c_str(), &end);

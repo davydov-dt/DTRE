@@ -407,7 +407,7 @@ GameServer::GameServer(Transport& transport, ServerOptions options, simulation::
     // The switches stay where the dispatcher, a route or a player set them:
     // not back to MainRoute behind each train (TrackNetwork::set_switches_stay).
     network.set_switches_stay(true);
-    network.set_throw_seconds(7.0f);
+    network.set_throw_seconds(4.0f);
     weather_.dynamic = options_.weather_dynamic ? 1 : 0;
     weather_.seed = options_.weather_seed ? options_.weather_seed : static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
 
