@@ -6,6 +6,7 @@
 #ifdef OPENRTS_HAS_WGPU
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #ifdef OPENRTS_HAS_IMGUI
@@ -53,6 +54,13 @@ TrackView::TrackView(std::unique_ptr<simulation::TrackNetwork> network, const fo
     : network_(std::move(network)), origin_(origin) {
     joints_ = network_->measure_joints(3);
     visible_ = remembered("track_lines").value_or("0") == "1";
+    float seconds = 7.0f;
+    if (const auto saved = remembered("junction_throw_seconds")) {
+        char* end = nullptr;
+        const float value = std::strtof(saved->c_str(), &end);
+        if (end && *end == '\0' && std::isfinite(value)) seconds = value;
+    }
+    network_->set_throw_seconds(seconds);
 }
 
 glm::vec3 TrackView::local(const simulation::TrackPoint& point, const float lift) const {
@@ -138,23 +146,12 @@ std::optional<simulation::TrackTraveller> TrackView::nearest_track(const glm::ve
     return simulation::TrackTraveller(*network_, location->node, location->offset, true);
 }
 
-void TrackView::advance_switches(const float elapsed) {
-    // Blades move at the shape's frame rate (30 fps: one frame per 1/30 s).
-    for (auto& [junction, frame] : switch_frames_) {
-        const auto* state = network_->junction(junction);
-        if (!state) continue;
-        const float target = state->selected == state->main_route ? 0.0f : 1.0f;
-        const float step = elapsed * 30.0f;
-        frame = frame < target ? (std::min)(target, frame + step) : (std::max)(target, frame - step);
-    }
-}
-
 void TrackView::update(const SceneInput& input, const float elapsed) {
     if (input.toggle_track) {
         visible_ = !visible_;
         remember("track_lines", visible_ ? "1" : "0");
     }
-    advance_switches(elapsed);
+    network_->update(elapsed);
 }
 
 void TrackView::draw(const WGPURenderPassEncoder pass, const glm::mat4& view_projection, const glm::vec3& focus) {
@@ -186,12 +183,8 @@ std::optional<float> TrackView::switch_frame(const renderer::StreamedInstance& i
     if (instance.kind != formats::WorldObjectKind::track) return std::nullopt;
     const auto junction = network_->junction_for_object(instance.world_tile_x, instance.world_tile_z, instance.uid);
     if (!junction) return std::nullopt;
-    auto [it, inserted] = switch_frames_.try_emplace(*junction, 0.0f);
-    if (inserted) {
-        const auto* state = network_->junction(*junction);
-        it->second = state && state->selected != state->main_route ? 1.0f : 0.0f;
-    }
-    return it->second;
+    const auto* state = network_->junction(*junction);
+    return state ? std::optional<float>(state->position) : std::nullopt;
 }
 
 void TrackView::collect_places(std::vector<WorldLabel>& labels, std::vector<WorldLine>& lines, const glm::vec3& eye,
@@ -270,6 +263,11 @@ void TrackView::draw_overlay() const {
                 visible_ ? "" : tr(" (hidden: T)"));
     ImGui::Text(tr("Joints: median %.1f mm, p95 %.1f cm, max %.2f m"), joints_.median * 1000.0, joints_.p95 * 100.0,
                 joints_.max);
+    float seconds = network_->throw_seconds();
+    if (ImGui::SliderFloat(tr("Switch throw time"), &seconds, 0.0f, 10.0f, "%.1f s")) {
+        network_->set_throw_seconds(seconds);
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) remember("junction_throw_seconds", std::to_string(network_->throw_seconds()));
     for (const auto& joint : joints_.worst) {
         ImGui::Text(tr("  worst: %s node %u%s%u  %.2f m"), joint.between_nodes ? tr("pin") : tr("section"), joint.node,
                     joint.between_nodes ? " -> " : " #",

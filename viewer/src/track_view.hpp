@@ -52,7 +52,6 @@ public:
 private:
     [[nodiscard]] glm::vec3 local(const simulation::TrackPoint& point, float lift = 0.0f) const;
     void build_lines();
-    void advance_switches(float elapsed);
 
     std::unique_ptr<simulation::TrackNetwork> network_;
     formats::RoutePosition origin_;
@@ -60,7 +59,6 @@ private:
     // The track diagram (yellow lines): off unless shown before (T, remembered).
     bool visible_ = false;
     std::string message_;
-    std::map<std::uint32_t, float> switch_frames_; // junction -> current blade frame
     simulation::JointStatistics joints_;
     std::map<std::uint32_t, std::pair<std::uint32_t, double>> item_places_; // TDB item -> vector node, offset
 };

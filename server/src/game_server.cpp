@@ -149,6 +149,13 @@ struct GameServer::Impl {
         double send_at = 0.0;
         std::vector<std::uint32_t> opened; // the signal units it opened
     };
+    // A route whose switches are still moving: held until every one of its
+    // junctions is settled, then opened as a HeldRoute.
+    struct PendingRoute {
+        simulation::RouteLeg leg;
+        bool rear_first = false;
+    };
+    std::map<std::uint32_t, PendingRoute> pending_routes;
     // A route opens its manual signals facing the train (0x40918C: not those
     // whose aspect the dispatcher picked), the signals being run as
     // rts_server.exe runs them.
@@ -262,6 +269,11 @@ struct GameServer::Impl {
         for (const auto& [train, route] : routes) {
             for (const auto& [junction, _] : route.junctions) {
                 if (junction == node) return train;
+            }
+        }
+        for (const auto& [train, route] : pending_routes) {
+            for (const auto& junction : route.leg.junctions) {
+                if (junction.junction == node) return train;
             }
         }
         return std::nullopt;
@@ -395,6 +407,7 @@ GameServer::GameServer(Transport& transport, ServerOptions options, simulation::
     // The switches stay where the dispatcher, a route or a player set them:
     // not back to MainRoute behind each train (TrackNetwork::set_switches_stay).
     network.set_switches_stay(true);
+    network.set_throw_seconds(7.0f);
     weather_.dynamic = options_.weather_dynamic ? 1 : 0;
     weather_.seed = options_.weather_seed ? options_.weather_seed : static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
 
@@ -1283,6 +1296,52 @@ void GameServer::tick(const double now) {
     }
     check_helpers();
     if (paused_) return; // nothing at all goes out while paused (live capture)
+    impl.network.update(static_cast<float>(dt));
+    // Routes whose switches were still moving: open them once every blade is
+    // in place; a switch set elsewhere meanwhile cancels the request.
+    for (auto it = impl.pending_routes.begin(); it != impl.pending_routes.end();) {
+        const auto train = it->first;
+        const auto* t = impl.train(train);
+        if (!t) {
+            send_route_left(train, -1.0f, it->second.rear_first);
+            it = impl.pending_routes.erase(it);
+            continue;
+        }
+        bool ready = true;
+        bool cancelled = false;
+        for (const auto& j : it->second.leg.junctions) {
+            const auto* state = impl.network.junction(j.junction);
+            if (!state || state->selected != j.branch) {
+                cancelled = true;
+                break;
+            }
+            if (!state->settled() || state->occupied) {
+                ready = false;
+                break;
+            }
+        }
+        if (cancelled) {
+            send_route_left(train, -1.0f, it->second.rear_first);
+            impl.note("train " + std::to_string(train) + "'s route cancelled: a switch was set elsewhere");
+            it = impl.pending_routes.erase(it);
+            continue;
+        }
+        if (!ready) {
+            ++it;
+            continue;
+        }
+        Impl::HeldRoute held{.leg = it->second.leg, .rear_first = it->second.rear_first};
+        for (const auto& j : held.leg.junctions) held.junctions.emplace_back(j.junction, j.distance);
+        held.sent = static_cast<float>(held.leg.length());
+        if (const auto old = impl.routes.find(train); old != impl.routes.end()) impl.close_signals(old->second);
+        impl.open_signals(held);
+        const auto length = held.leg.length();
+        const auto rear_first = held.rear_first;
+        impl.routes[train] = std::move(held);
+        it = impl.pending_routes.erase(it);
+        send_route_left(train, static_cast<float>(length), rear_first);
+        impl.note("train " + std::to_string(train) + "'s route set: the switches are in place");
+    }
     const auto to_playing = [&](const net::Bytes& bytes) {
         for (auto& [_, user] : impl.users) {
             if (user.playing && user.connection) transport_.send(user.connection, bytes);
@@ -2184,7 +2243,10 @@ bool GameServer::set_route(const std::uint32_t train, const std::vector<std::vec
     // another train's route the other way.
     for (const auto& j : leg.junctions) {
         const auto* state = impl.network.junction(j.junction);
-        if (!state || state->selected == j.branch) continue;
+        if (!state) {
+            result = "junction " + std::to_string(j.junction) + " is not on the track";
+            return false;
+        }
         if (impl.locked.contains(j.junction)) {
             result = "junction " + std::to_string(j.junction) + " is locked";
             return false;
@@ -2217,6 +2279,30 @@ bool GameServer::set_route(const std::uint32_t train, const std::vector<std::vec
         }
         held.junctions.emplace_back(j.junction, j.distance);
     }
+    bool waiting = false;
+    for (const auto& j : leg.junctions) {
+        const auto* state = impl.network.junction(j.junction);
+        if (!state || !state->settled()) {
+            waiting = true;
+            break;
+        }
+    }
+    if (waiting) {
+        if (const auto old = impl.routes.find(train); old != impl.routes.end()) {
+            impl.close_signals(old->second);
+            impl.routes.erase(old);
+        }
+        impl.pending_routes[train] = Impl::PendingRoute{.leg = leg, .rear_first = from_rear};
+        send_route_left(train, -1.0f, from_rear);
+        char text[200];
+        std::snprintf(text, sizeof text,
+                      "train %u's route: %.0f m, %zu junctions, waiting for the switches to move",
+                      train, leg.length(), held.junctions.size());
+        result = text;
+        impl.note(result);
+        return true;
+    }
+    impl.pending_routes.erase(train);
     const auto count = held.junctions.size();
     held.sent = static_cast<float>(leg.length());
     if (const auto old = impl.routes.find(train); old != impl.routes.end()) impl.close_signals(old->second);
@@ -2247,20 +2333,30 @@ std::optional<simulation::TrackLocation> GameServer::train_end(const std::uint32
 }
 
 std::optional<simulation::RouteLeg> GameServer::route_leg(const std::uint32_t train) const {
-    const auto it = impl_->routes.find(train);
-    if (it == impl_->routes.end()) return std::nullopt;
-    return it->second.leg;
+    if (const auto it = impl_->routes.find(train); it != impl_->routes.end()) return it->second.leg;
+    if (const auto it = impl_->pending_routes.find(train); it != impl_->pending_routes.end()) return it->second.leg;
+    return std::nullopt;
 }
 
 std::vector<std::uint32_t> GameServer::route_junctions(const std::uint32_t train) const {
     std::vector<std::uint32_t> out;
     if (const auto it = impl_->routes.find(train); it != impl_->routes.end()) {
         for (const auto& [node, _] : it->second.junctions) out.push_back(node);
+        return out;
+    }
+    if (const auto it = impl_->pending_routes.find(train); it != impl_->pending_routes.end()) {
+        for (const auto& j : it->second.leg.junctions) out.push_back(j.junction);
     }
     return out;
 }
 
 bool GameServer::cancel_route(const std::uint32_t train, std::string& error) {
+    if (const auto pending = impl_->pending_routes.find(train); pending != impl_->pending_routes.end()) {
+        const bool rear_first = pending->second.rear_first;
+        impl_->pending_routes.erase(pending);
+        send_route_left(train, -1.0f, rear_first);
+        return true;
+    }
     const auto it = impl_->routes.find(train);
     if (it == impl_->routes.end()) {
         error = "train " + std::to_string(train) + " has no route";
@@ -3106,7 +3202,9 @@ void GameServer::step_segments() {
             }
             const bool whole = free == junctions.size();
             if (!whole && !partial) continue;
-            // Thrown to their branches (to everyone, 0x460A).
+            // Thrown to their branches (to everyone, 0x460A). A switch still
+            // moving is not counted: the route stops before it and comes back
+            // next tick.
             std::size_t thrown = 0;
             for (std::size_t k = 0; k < free; ++k) {
                 const auto [node, branch] = junctions[k];
@@ -3120,6 +3218,7 @@ void GameServer::step_segments() {
                         if (user.playing && user.connection) transport_.send(user.connection, bytes);
                     }
                 }
+                if (!state->settled()) break;
                 ++thrown;
             }
             s.thrown = static_cast<std::uint16_t>(thrown);

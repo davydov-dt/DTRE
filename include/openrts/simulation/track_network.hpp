@@ -53,11 +53,18 @@ struct JunctionState {
     std::uint32_t selected{};     // branch index (out pin)
     std::uint32_t main_route{};   // TrackShape MainRoute; the rest position
     bool occupied = false;
+    // The blades' place between MainRoute (0) and the other branch (1). The
+    // switch takes `TrackNetwork::throw_seconds()` to move there; `selected`
+    // is the branch it is being set to, this is where the blades are now.
+    float position = 0.0f;
     // Owners holding the junction, oldest first, with the branch each wants.
     std::vector<std::pair<std::uint64_t, std::uint32_t>> reservations;
     // Tails that passed the junction in the facing direction and keep it
     // occupied for `ClearanceDist` more metres: owner -> metres left.
     std::map<std::uint64_t, double> clearance;
+
+    [[nodiscard]] float target_position() const noexcept { return selected == main_route ? 0.0f : 1.0f; }
+    [[nodiscard]] bool settled() const noexcept { return position == target_position(); }
 };
 
 struct NetworkIssue {
@@ -105,6 +112,15 @@ public:
     // for another owner's path (a driver may throw a hand switch only when
     // no dispatcher route holds it, rts_server version notes).
     bool throw_junction(std::uint32_t node, std::uint32_t branch, std::uint64_t owner = 0);
+    // Sets the switch at once, as a train running through it does.
+    void force_junction(std::uint32_t node, std::uint32_t branch);
+    // How long the blades take to move from one branch to the other, in
+    // seconds; 0 (the default for tools and tests) sets them at once. The
+    // viewer and the server set the player's time.
+    void set_throw_seconds(float seconds) noexcept;
+    [[nodiscard]] float throw_seconds() const noexcept { return throw_seconds_; }
+    // Moves every junction's blades toward the branch it is set to.
+    void update(float elapsed);
     // Drops `owner`'s reservation without touching occupancy (its path
     // changed or no longer reaches here). A free junction is then set as a
     // release sets it: to the next reservation's branch or MainRoute.
@@ -159,6 +175,7 @@ public:
     void set_rail_joint_layout(RailJointLayout layout);
 
 private:
+    float throw_seconds_ = 0.0f;
     bool switches_stay_ = false;
     std::vector<WantedSwitch> wanted_;
     formats::TrackDatabase database_;

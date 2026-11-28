@@ -395,9 +395,21 @@ void Dispatcher::reserve(Follower& f, const Train& train, const std::span<const 
             break;
         }
         if (!state->occupied) {
-            state->selected = pass.branch;
-        } else if (state->selected != pass.branch) {
-            // Under another train and set the other way.
+            if (state->selected != pass.branch && !network_->throw_junction(pass.junction, pass.branch, f.id)) {
+                p.authority = pass.distance;
+                p.blocked_at = pass.junction;
+                blocked = j;
+                break;
+            }
+            if (!state->settled()) {
+                // The blades are still moving: wait at the junction.
+                p.authority = pass.distance;
+                p.blocked_at = pass.junction;
+                blocked = j;
+                break;
+            }
+        } else if (state->selected != pass.branch || !state->settled()) {
+            // Under another train and set the other way, or still moving.
             p.authority = pass.distance;
             p.blocked_at = pass.junction;
             blocked = j;

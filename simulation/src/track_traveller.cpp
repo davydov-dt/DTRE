@@ -106,13 +106,15 @@ bool TrackTraveller::leave(const bool forward, const JunctionMode mode, const st
             const bool held_by_other = !state->reservations.empty() && state->reservations.front().first != owner;
             switch (mode) {
             case JunctionMode::occupy:
+                // A facing move waits for the blades to be in place.
+                if (facing && !state->settled()) return false;
                 pass.forced = held_by_other;
                 state->occupied = true;
                 if (!facing && state->selected != branch) {
                     // run-through: the switch is pushed over (on a network's
                     // track the train's owner sets it: want_switch).
                     if (network.switches_stay()) network.want_switch(junction, branch, owner);
-                    else state->selected = branch;
+                    else network.force_junction(junction, branch);
                 }
                 break;
             case JunctionMode::release:

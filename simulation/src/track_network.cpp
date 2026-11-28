@@ -69,6 +69,7 @@ TrackNetwork::TrackNetwork(formats::TrackDatabase database, formats::TrackSectio
                 state.main_route = *node.shape->main_route;
             }
             state.selected = state.main_route;
+            state.position = state.target_position();
             junctions_[source.index] = state;
             if (node.uid) {
                 junction_objects_[{node.uid->world_tile_x, node.uid->world_tile_z, node.uid->world_uid}] = source.index;
@@ -123,7 +124,40 @@ bool TrackNetwork::throw_junction(const std::uint32_t node, const std::uint32_t 
     if (!state || !info || branch >= info->branch_count() || state->occupied) return false;
     if (!state->reservations.empty() && state->reservations.front().first != owner) return false;
     state->selected = branch;
+    if (throw_seconds_ <= 0.0f) state->position = state->target_position();
     return true;
+}
+
+void TrackNetwork::force_junction(const std::uint32_t node, const std::uint32_t branch) {
+    auto* state = junction(node);
+    const auto* info = this->node(node);
+    if (!state || !info || branch >= info->branch_count()) return;
+    state->selected = branch;
+    state->position = state->target_position();
+}
+
+void TrackNetwork::set_throw_seconds(const float seconds) noexcept {
+    throw_seconds_ = std::clamp(seconds, 0.0f, 30.0f);
+    if (throw_seconds_ <= 0.0f) {
+        for (auto& [_, state] : junctions_) state.position = state.target_position();
+    }
+}
+
+void TrackNetwork::update(const float elapsed) {
+    if (elapsed <= 0.0f) return;
+    if (throw_seconds_ <= 0.0f) {
+        for (auto& [_, state] : junctions_) state.position = state.target_position();
+        return;
+    }
+    const float step = elapsed / throw_seconds_;
+    for (auto& [_, state] : junctions_) {
+        const float target = state.target_position();
+        if (state.position < target) {
+            state.position = (std::min)(target, state.position + step);
+        } else if (state.position > target) {
+            state.position = (std::max)(target, state.position - step);
+        }
+    }
 }
 
 void TrackNetwork::cancel_reservation(const std::uint32_t node, const std::uint64_t owner) {
@@ -134,6 +168,7 @@ void TrackNetwork::cancel_reservation(const std::uint32_t node, const std::uint6
     std::erase_if(state->reservations, [&](const auto& r) { return r.first == owner; });
     if (state->reservations.size() == before || state->occupied || !was_first || switches_stay_) return;
     state->selected = state->reservations.empty() ? state->main_route : state->reservations.front().second;
+    if (throw_seconds_ <= 0.0f) state->position = state->target_position();
 }
 
 void TrackNetwork::release_junction(const std::uint32_t node, const std::uint64_t owner) {
@@ -148,6 +183,7 @@ void TrackNetwork::release_junction(const std::uint32_t node, const std::uint64_
         return;
     }
     state->selected = target;
+    if (throw_seconds_ <= 0.0f) state->position = state->target_position();
 }
 
 void TrackNetwork::want_switch(const std::uint32_t node, const std::uint32_t branch, const std::uint64_t owner) {

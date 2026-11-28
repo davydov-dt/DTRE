@@ -484,6 +484,7 @@ const std::unordered_map<std::string_view, const char*>& russian() {
         {"Rain and snow: openRTS's", "Дождь и снег openRTS"},
         {"Fog in rain and snow", "Туман в дождь и снег"},
         {"Rain and snow strength", "Сила дождя и снега"},
+        {"Switch throw time", "Время перевода стрелки"},
         {"as the weather", "по погоде"},
         {"drizzle", "морось"},
         {"rain##strength", "дождь"},
