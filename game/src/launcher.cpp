@@ -1412,8 +1412,9 @@ void Launcher::State::draw_home() {
     const auto margin = 72.0f * scale;
 
     auto* cache = images.get();
-    draw->AddRectFilledMultiColor({0, 0}, display, rgb(14, 16, 19, 255), rgb(15, 17, 20, 255), rgb(21, 23, 28, 255),
-                                  rgb(19, 21, 25, 255));
+    const auto background = fs::path(image_dir) / "station.png";
+    picture(draw, cache ? cache->load(background) : nullptr, cache ? cache->size(background) : std::pair{0, 0}, {{0, 0}, display}, 0.0f);
+    draw->AddRectFilled({0, 0}, display, rgb(10, 12, 16, 242));
 
     const auto [clock, date] = header_clock();
     label(draw, ui::brand_font(), 34.0f * scale, {margin, 48.0f * scale}, white, "DARK TEAM RAILWAY ENGINE");
@@ -1633,8 +1634,10 @@ void Launcher::State::draw_account() {
     const auto display = ImGui::GetIO().DisplaySize;
     const auto scale = menu_scale();
     const auto margin = 72.0f * scale;
-    draw->AddRectFilledMultiColor({0, 0}, display, rgb(14, 16, 19, 255), rgb(15, 17, 20, 255), rgb(21, 23, 28, 255),
-                                  rgb(19, 21, 25, 255));
+    const auto background = fs::path(image_dir) / "station.png";
+    auto* cache = images.get();
+    picture(draw, cache ? cache->load(background) : nullptr, cache ? cache->size(background) : std::pair{0, 0}, {{0, 0}, display}, 0.0f);
+    draw->AddRectFilled({0, 0}, display, rgb(10, 12, 16, 242));
 
     const auto [clock, date] = header_clock();
     const Rect header{{margin, 26.0f * scale}, {display.x - margin, 94.0f * scale}};
